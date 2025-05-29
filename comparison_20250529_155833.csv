@@ -1,0 +1,27 @@
+model,prompt,response,timestamp
+anthropic.claude-3-sonnet-20240229-v1:0,What is a cosmetic guidance?,"A cosmetic guidance is a set of recommendations or best practices issued by regulatory bodies or industry organizations related to the production, labeling, and marketing of cosmetic products.
+
+Some examples of cosmetic guidances include:
+
+- FDA Cosmetic Guidance Documents - These provide the FDA's current thinking and recommendations on various topics related to cosmetics, such as good manufacturing practices, labeling requirements, use of color additives, etc.
+
+- ISO Standards for Cosmetics - The International Organization for Standardization provides guidance on areas like cosmetic microbiology, sun protection test methods, and more.
+
+- Industry Association Guidances - Groups like the Personal Care Products Council and others issue voluntary guidance on ingredient safety, sustainability practices, claim substantiation, etc.
+
+The purpose of cosmetic guidances is to promote consumer safety, truth in advertising/labeling, and industry harmonization even though they are typically non-binding recommendations rather than enforceable regulations. Following recognized guidances helps cosmetic companies comply with applicable laws and meet consumer expectations.",2025-05-29T15:58:26.173369
+anthropic.claude-3-haiku-20240307-v1:0,What is a cosmetic guidance?,"A cosmetic guidance refers to guidance or regulations provided by regulatory authorities that govern the manufacturing, labeling, and marketing of cosmetic products. Some key things about cosmetic guidance:
+
+- It outlines requirements and standards that cosmetic companies must adhere to in order to ensure the safety and quality of their products.
+
+- It covers aspects like allowed ingredients, safety assessments, Good Manufacturing Practices, labeling claims, advertising, and product testing.
+
+- The specific cosmetic guidance can vary by country or region, as different regulatory bodies (e.g. FDA in the US, Health Canada, European Commission) have their own set of guidelines.
+
+- Cosmetic guidance aims to protect consumer health and safety, promote transparency, and provide a regulatory framework for the cosmetics industry to operate within.
+
+- Compliance with relevant cosmetic guidance is mandatory for companies that want to legally market and sell their cosmetic products in a particular jurisdiction.
+
+So in summary, cosmetic guidance refers to the official regulatory policies and standards that cosmetic manufacturers and marketers must follow to ensure their products meet safety and quality requirements.",2025-05-29T15:58:29.394314
+meta.llama3-70b-instruct-v1:0,What is a cosmetic guidance?," A cosmetic guidance is a document that provides recommendations for the safe use of a cosmetic product, ensuring that it does not pose a risk to human health. These guidances are issued by regulatory authorities, such as the Food and Drug Administration (FDA) in the United States, and outline the necessary safety assessments, labeling requirements, and good manufacturing practices (GMPs) for cosmetics. Cosmetic guidances cover a range of topics, including ingredient safety, product labeling, and testing protocols. They are designed to help manufacturers ensure that their products are safe for consumers and comply with relevant regulations.",2025-05-29T15:58:32.049993
+mistral.mistral-7b-instruct-v0:2,What is a cosmetic guidance?," Cosmetic guidance refers to advice or recommendations given by a healthcare professional, such as a dermatologist, esthetician, or cosmetician, to help improve the appearance of the skin or other cosmetic concerns. This may include suggestions for skincare products, treatments, or lifestyle modifications. It is important to note that cosmetic guidance does not diagnose or treat any medical conditions, but rather focuses on enhancing the appearance of the skin or other cosmetic features. Always consult with a qualified healthcare professional for any concerns related to your health or the health of your skin.",2025-05-29T15:58:33.239052
