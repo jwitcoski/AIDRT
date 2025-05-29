@@ -1,0 +1,268 @@
+import boto3
+import csv
+import json
+from datetime import datetime
+import os
+import re
+import statistics
+
+def calculate_coherence_score(text):
+    """Calculate coherence based on sentence structure and flow"""
+    sentences = re.split(r'[.!?]+', text.strip())
+    sentences = [s.strip() for s in sentences if s.strip()]
+    
+    if len(sentences) == 0:
+        return 0
+    
+    # Basic coherence metrics
+    avg_sentence_length = statistics.mean([len(s.split()) for s in sentences])
+    sentence_count = len(sentences)
+    
+    # Penalize very short or very long sentences
+    length_score = min(1.0, max(0.1, 1 - abs(avg_sentence_length - 15) / 20))
+    
+    # Check for proper sentence structure (basic)
+    complete_sentences = sum(1 for s in sentences if len(s.split()) > 3)
+    structure_score = complete_sentences / sentence_count if sentence_count > 0 else 0
+    
+    # Check for transition words/phrases (basic coherence indicator)
+    transition_words = ['however', 'therefore', 'furthermore', 'moreover', 'additionally', 
+                       'consequently', 'thus', 'hence', 'meanwhile', 'similarly']
+    transition_count = sum(1 for word in transition_words if word in text.lower())
+    transition_score = min(1.0, transition_count / max(1, sentence_count - 1))
+    
+    return (length_score * 0.4 + structure_score * 0.4 + transition_score * 0.2)
+
+def calculate_relevance_score(prompt, response):
+    """Calculate relevance based on keyword overlap and response focus"""
+    prompt_words = set(prompt.lower().split())
+    response_words = set(response.lower().split())
+    
+    # Remove common stop words
+    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were'}
+    prompt_words = prompt_words - stop_words
+    response_words = response_words - stop_words
+    
+    if len(prompt_words) == 0:
+        return 0
+    
+    # Calculate keyword overlap
+    overlap = len(prompt_words.intersection(response_words))
+    keyword_score = overlap / len(prompt_words)
+    
+    # Check if response directly addresses the question
+    question_indicators = ['what', 'how', 'why', 'when', 'where', 'who']
+    has_question = any(indicator in prompt.lower() for indicator in question_indicators)
+    
+    if has_question:
+        # Look for answer patterns
+        answer_patterns = ['is a', 'are', 'refers to', 'means', 'involves', 'includes']
+        has_answer_pattern = any(pattern in response.lower() for pattern in answer_patterns)
+        answer_score = 1.0 if has_answer_pattern else 0.3
+    else:
+        answer_score = 0.8  # Non-question prompts get moderate score
+    
+    return (keyword_score * 0.6 + answer_score * 0.4)
+
+def calculate_accuracy_score(response):
+    """Calculate accuracy based on factual consistency and logical structure"""
+    # Check for contradictions (basic)
+    contradiction_pairs = [
+        ('always', 'never'), ('all', 'none'), ('increase', 'decrease'),
+        ('positive', 'negative'), ('true', 'false'), ('yes', 'no')
+    ]
+    
+    response_lower = response.lower()
+    contradiction_count = 0
+    for word1, word2 in contradiction_pairs:
+        if word1 in response_lower and word2 in response_lower:
+            # Check if they're in the same sentence (more likely to be contradictory)
+            sentences = re.split(r'[.!?]+', response)
+            for sentence in sentences:
+                if word1 in sentence.lower() and word2 in sentence.lower():
+                    contradiction_count += 1
+                    break
+    
+    contradiction_penalty = min(0.5, contradiction_count * 0.2)
+    
+    # Check for uncertainty markers (which can indicate honesty about limitations)
+    uncertainty_markers = ['might', 'could', 'may', 'possibly', 'likely', 'probably', 'generally', 'typically']
+    uncertainty_count = sum(1 for marker in uncertainty_markers if marker in response_lower)
+    uncertainty_score = min(0.3, uncertainty_count * 0.1)  # Moderate uncertainty is good
+    
+    # Check for evidence/reasoning indicators
+    evidence_markers = ['because', 'since', 'due to', 'research shows', 'studies indicate', 'evidence suggests']
+    evidence_count = sum(1 for marker in evidence_markers if marker in response_lower)
+    evidence_score = min(0.4, evidence_count * 0.2)
+    
+    base_score = 0.7  # Start with moderate accuracy assumption
+    final_score = base_score + uncertainty_score + evidence_score - contradiction_penalty
+    
+    return max(0, min(1, final_score))
+
+def evaluate_response(prompt, response):
+    """Evaluate a response across multiple metrics"""
+    if not response or 'Error:' in response:
+        return {
+            'coherence': 0,
+            'relevance': 0,
+            'accuracy': 0,
+            'overall': 0
+        }
+    
+    coherence = calculate_coherence_score(response)
+    relevance = calculate_relevance_score(prompt, response)
+    accuracy = calculate_accuracy_score(response)
+    overall = (coherence + relevance + accuracy) / 3
+    
+    return {
+        'coherence': round(coherence, 3),
+        'relevance': round(relevance, 3),
+        'accuracy': round(accuracy, 3),
+        'overall': round(overall, 3)
+    }
+
+def lambda_handler(event, context):
+    # Initialize clients
+    bedrock = boto3.client('bedrock-runtime')
+    s3 = boto3.client('s3')
+    
+    # Define models to test
+    models = [
+        'anthropic.claude-3-sonnet-20240229-v1:0',
+        'anthropic.claude-3-haiku-20240307-v1:0',
+        'meta.llama3-70b-instruct-v1:0',
+        'mistral.mistral-7b-instruct-v0:2'
+    ]
+
+    prompt = "What is a cosmetic guidance?"
+    results = []
+
+    for model_id in models:
+        try:
+            # Prepare request based on model type
+            if 'anthropic' in model_id:
+                request_body = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 1000,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                }
+            elif 'meta.llama' in model_id:
+                request_body = {
+                    "prompt": prompt,
+                    "max_gen_len": 1000,
+                    "temperature": 0.7,
+                    "top_p": 0.9
+                }
+            elif 'mistral' in model_id:
+                request_body = {
+                    "prompt": f"<s>[INST] {prompt} [/INST]",
+                    "max_tokens": 1000,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "top_k": 50
+                }
+            
+            # Invoke the model
+            response = bedrock.invoke_model(
+                modelId=model_id,
+                body=json.dumps(request_body),
+                contentType='application/json'
+            )
+            
+            # Parse response
+            response_body = json.loads(response['body'].read())
+            
+            # Extract text based on model response format
+            if 'anthropic' in model_id:
+                output_text = response_body['content'][0]['text']
+            elif 'meta.llama' in model_id:
+                output_text = response_body['generation']
+            elif 'mistral' in model_id:
+                output_text = response_body['outputs'][0]['text']
+            
+            # Evaluate the response
+            evaluation = evaluate_response(prompt, output_text)
+            
+            results.append({
+                'model': model_id,
+                'prompt': prompt,
+                'response': output_text,
+                'coherence_score': evaluation['coherence'],
+                'relevance_score': evaluation['relevance'],
+                'accuracy_score': evaluation['accuracy'],
+                'overall_score': evaluation['overall'],
+                'timestamp': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            results.append({
+                'model': model_id,
+                'prompt': prompt,
+                'response': f'Error: {str(e)}',
+                'coherence_score': 0,
+                'relevance_score': 0,
+                'accuracy_score': 0,
+                'overall_score': 0,
+                'timestamp': datetime.now().isoformat()
+            })
+
+    # Write to /tmp directory (writable in Lambda)
+    tmp_file_path = '/tmp/ai_comparison.csv'
+    with open(tmp_file_path, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=['model', 'prompt', 'response', 'coherence_score', 
+                                                 'relevance_score', 'accuracy_score', 'overall_score', 'timestamp'])
+        writer.writeheader()
+        writer.writerows(results)
+    
+    # Upload to S3
+    bucket_name = 'awstestbedrockaidrt'
+    s3_key = f'ai-comparisons/comparison_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    
+    try:
+        s3.upload_file(tmp_file_path, bucket_name, s3_key)
+    except Exception as e:
+        print(f"Error uploading to S3: {str(e)}")
+    
+    # Calculate summary statistics
+    valid_results = [r for r in results if r['overall_score'] > 0]
+    if valid_results:
+        avg_coherence = statistics.mean([r['coherence_score'] for r in valid_results])
+        avg_relevance = statistics.mean([r['relevance_score'] for r in valid_results])
+        avg_accuracy = statistics.mean([r['accuracy_score'] for r in valid_results])
+        avg_overall = statistics.mean([r['overall_score'] for r in valid_results])
+        
+        best_model = max(valid_results, key=lambda x: x['overall_score'])
+    else:
+        avg_coherence = avg_relevance = avg_accuracy = avg_overall = 0
+        best_model = None
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'message': f'Comparison completed and saved to s3://{bucket_name}/{s3_key}',
+            'results_count': len(results),
+            'evaluation_summary': {
+                'avg_coherence': round(avg_coherence, 3),
+                'avg_relevance': round(avg_relevance, 3),
+                'avg_accuracy': round(avg_accuracy, 3),
+                'avg_overall': round(avg_overall, 3),
+                'best_model': best_model['model'] if best_model else None,
+                'best_score': best_model['overall_score'] if best_model else 0
+            },
+            'individual_results': [
+                {
+                    'model': r['model'],
+                    'coherence': r['coherence_score'],
+                    'relevance': r['relevance_score'],
+                    'accuracy': r['accuracy_score'],
+                    'overall': r['overall_score']
+                } for r in results
+            ]
+        })
+    }
